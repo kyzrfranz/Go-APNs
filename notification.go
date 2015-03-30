@@ -7,6 +7,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+    "log"
 	"time"
 )
 
@@ -219,12 +220,16 @@ func (this *Notification) ToBinary(token []byte) ([]byte, error) {
 	binary.Write(buffer, binary.BigEndian, uint8(1))             // Command
 	binary.Write(buffer, binary.BigEndian, nextIdentifier)       // Identifier
 	binary.Write(buffer, binary.BigEndian, uint32(this.Expiry))  // Expiry
-	binary.Write(buffer, binary.BigEndian, uint16(len(token)))   // Device token length
+    binary.Write(buffer, binary.BigEndian, uint16(len(token)))   // Device token length
 	binary.Write(buffer, binary.BigEndian, token)                // Token
 	binary.Write(buffer, binary.BigEndian, uint16(len(payload))) // Payload length
 	binary.Write(buffer, binary.BigEndian, payload)              // Payload
+    binary.Write(buffer, binary.BigEndian, uint8(5))             // priority id
+    binary.Write(buffer, binary.BigEndian, uint16(1))            // priority length
+    binary.Write(buffer, binary.BigEndian, 10)                   // priority value
 
-	// If the next identifier is greater than the max identifier, reset it.
+
+    // If the next identifier is greater than the max identifier, reset it.
 	if nextIdentifier >= MAX_IDENTIFIER {
 		nextIdentifier = 0
 	}
@@ -245,6 +250,8 @@ func (this *Notification) SendTo(token string) error {
 	if err != nil {
 		return err
 	}
+
+    //this.DebugBinary(token)
 
 	if this.Sandbox {
 		err = sandboxConnection.Write(message)
@@ -271,6 +278,8 @@ func (this *Notification) SendTo(token string) error {
 
 // DebugBinary outputs each portion of the binary enhanced format for manual verification.
 func (this *Notification) DebugBinary(token string) error {
+    log.Printf("[APNS] try and debug token")
+
 	// Convert the hex string iOS returns into a device token.
 	byteToken, err := hex.DecodeString(token)
 	if err != nil {
@@ -293,24 +302,32 @@ func (this *Notification) DebugBinary(token string) error {
 	buffer = bytes.NewBuffer(message[5:9])
 	binary.Read(buffer, binary.BigEndian, &expiry)
 
+    // Convert the Token Length to a string.
+    var priority uint8
+    buffer = bytes.NewBuffer(message[9:10])
+    binary.Read(buffer, binary.BigEndian, &priority)
+
 	// Convert the Token Length to a string.
 	var tokenLength uint16
-	buffer = bytes.NewBuffer(message[9:11])
+	buffer = bytes.NewBuffer(message[10:12])
 	binary.Read(buffer, binary.BigEndian, &tokenLength)
 
 	// Convert the Token Length to a string.
 	var payloadLength uint16
-	buffer = bytes.NewBuffer(message[43:45])
+	buffer = bytes.NewBuffer(message[44:46])
 	binary.Read(buffer, binary.BigEndian, &payloadLength)
 
-	fmt.Println("Binary Output:")
-	fmt.Println("- Command:\t", message[0])
-	fmt.Println("- Identifier:\t", identifier)
-	fmt.Println("- Expiry:\t", expiry)
-	fmt.Println("- Token Len:\t", tokenLength)
-	fmt.Println("- Token:\t", hex.EncodeToString(message[11:43]))
-	fmt.Println("- Paylod Len:\t", payloadLength)
-	fmt.Println("- Payload:\t", string(message[45:]))
+
+
+    log.Println("Binary Output:")
+    log.Println("- Command:\t", message[0])
+    log.Println("- Identifier:\t", identifier)
+    log.Println("- Expiry:\t", expiry)
+    log.Println("- Priority:\t", priority)
+    log.Println("- Token Len:\t", tokenLength)
+    log.Println("- Token:\t", hex.EncodeToString(message[12:44]))
+    log.Println("- Paylod Len:\t", payloadLength)
+    log.Println("- Payload:\t", string(message[46:]))
 
 	return nil
 }
